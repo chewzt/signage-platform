@@ -1,0 +1,19 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - development
+      - hotfix
+      - hotfix/**
+      - release/**
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  pr-checks:
+    uses: Nextale-Enterprise/deployment-repo/.github/workflows/pr-checks.yml@master
+    with:
+      app_name: ${{ github.event.repository.name }}

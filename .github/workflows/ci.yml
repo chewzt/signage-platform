@@ -1,0 +1,58 @@
+name: Application CI/CD
+
+on:
+  pull_request:
+    branches:
+      - development
+      - hotfix
+      - hotfix/**
+      - release/**
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      docker_image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+      environment:
+        description: 'Environment (foodtaleprod or nextaleprod)'
+        required: true
+        type: choice
+        options:
+          - foodtaleprod
+          - nextaleprod
+        default: foodtaleprod
+
+jobs:
+  restrict-workflow-dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check team membership
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token ${{ secrets.ADMIN_PAT }}" \
+            "https://api.github.com/orgs/${{ github.repository_owner }}/teams/nextale-approver/memberships/${{ github.actor }}")
+          if [ "$RESPONSE" != "200" ]; then
+            echo "User ${{ github.actor }} is not in the nextale-approver team" >&2
+            exit 1
+          fi
+        env:
+          PAT_TOKEN: ${{ secrets.ADMIN_PAT }}
+
+  deploy-service-pr:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    uses: Nextale-Enterprise/deployment-repo/.github/workflows/ci.yml@master
+    with:
+      environment: "${{ github.event_name == 'pull_request' && (github.event.pull_request.base.ref == 'hotfix' || startsWith(github.event.pull_request.base.ref, 'hotfix/') || startsWith(github.event.pull_request.base.ref, 'release/')) && 'development' || github.event.pull_request.base.ref }}"
+      docker_image_tag: ''
+      app_name: ${{ github.event.repository.name }}
+
+  deploy-service-workflow-dispatch:
+    if: github.event_name == 'workflow_dispatch' && needs.restrict-workflow-dispatch.result == 'success'
+    needs: restrict-workflow-dispatch
+    uses: Nextale-Enterprise/deployment-repo/.github/workflows/ci.yml@master # Replace with actual SHA
+    with:
+      environment: ${{ inputs.environment }}
+      docker_image_tag: ${{ inputs.docker_image_tag }}
+      app_name: ${{ github.event.repository.name }}
