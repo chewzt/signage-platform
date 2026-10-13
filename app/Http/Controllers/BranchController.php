@@ -65,6 +65,7 @@ class BranchController extends Controller
 
         return response()->json($branch->fresh()->present());
     }
+    
 
     public function destroy(Request $request, Branch $branch): JsonResponse
     {
